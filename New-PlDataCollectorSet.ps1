@@ -6,7 +6,7 @@
         .DESCRIPTION
             Creates new data collector set from template on remote systems or localhost
  
-        .PARAMETER
+        .PARAMETERS
             ComputerNames - single remote computer, array of remote computers, default is localhost
             xmlTemplateName - name of XML Template file, default is first XML file in script folder
             SampleInterval - sets the system polling periodicity in seconds, default is 15 sec
@@ -21,13 +21,14 @@
 
     [CmdletBinding()]
     param (
-        [Parameter(ValueFromPipeline)][String[]]$ComputerNames = @("localhost"),
-        [string]$DCSName = "Set1",
+        [string[]]$ComputerNames = @("localhost"),
+        [parameter(ValueFromPipelineByPropertyName)][string]$DCSName = "Set1",
         [PSCredential]$Credential,
         [string]$xmlTemplateName = ([string[]](Get-ChildItem -Path ".\" -Filter "*.xml").Name)[0],
-        [int]$SampleInterval = 15,
-        [int]$RotationPeriod = 3,
-        [bool]$StartUponCreation = $false
+        [parameter(ValueFromPipelineByPropertyName)][int]$SampleInterval = 15,
+        [parameter(ValueFromPipelineByPropertyName)][int]$RotationPeriod = 3,
+        [bool]$StartUponCreation = $false,
+        [parameter(ValueFromPipelineByPropertyName,DontShow)][xml]$XML
     )
 
     begin {
@@ -120,19 +121,14 @@
     }
 
     Process {
-        if ($_) { #the data came from the pipeline
-            $_
-            Invoke-Command -Credential $Credentials -ComputerName $_ -SessionOption $SessionOptions -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$StartUponCreation) -ScriptBlock $Action
-        } else { #the data came from parameter -ComputerNames
-            if ($ComputerNames -ne @("localhost")) {
-                $ComputerNames | % {
-                    $_
-                    Invoke-Command -Credential $Credentials -ComputerName $_ -SessionOption $SessionOptions -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$StartUponCreation) -ScriptBlock $Action
-                }
-            } else { #localhost
-                $env:COMPUTERNAME
-                Invoke-Command -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$StartUponCreation) -ScriptBlock $Action
+        if ($ComputerNames -ne @("localhost")) {
+            $ComputerNames | % {
+                $_
+                Invoke-Command -Credential $Credentials -ComputerName $_ -SessionOption $SessionOptions -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$StartUponCreation) -ScriptBlock $Action
             }
+        } else { #localhost
+            $env:COMPUTERNAME
+            Invoke-Command -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$StartUponCreation) -ScriptBlock $Action
         }
     }
 }
