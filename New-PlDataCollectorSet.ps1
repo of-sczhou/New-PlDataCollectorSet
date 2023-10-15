@@ -11,10 +11,10 @@
             xmlTemplateName - name of XML Template file, default is first XML file in script folder
             SampleInterval - sets the system polling periodicity in seconds, default is 15 sec
             RotationPeriod - set the rotation period in days, default is 3 days
-            StartUponCreation - automatic startup Data Collector Set after creation, default is False
+            StartDataCollector - this is a switch parameter, if it present Data Collector Set start immediatly after creation
 
          .EXAMPLE
-            New-PlDataCollectorSet //Creates New Data Collector Set at local computer with default settings
+            New-PlDataCollectorSet : creates DCS on the local computer using the first template found in the script's startup folder (Set1.xml coming with script in original release folder)
             New-PlDataCollectorSet -DCSName "DiagSet_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName Set1.xml -StartUponCreation $false
             New-PlDataCollectorSet -ComputerNames "srv1.contoso.com","srv1.contoso.com" -Credential (Get-Credential)  -DCSName "DiagSet_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName Set1.xml -StartUponCreation $false
     #>
@@ -27,7 +27,7 @@
         [string]$xmlTemplateName = ([string[]](Get-ChildItem -Path ".\" -Filter "*.xml").Name)[0],
         [parameter(ValueFromPipelineByPropertyName)][int]$SampleInterval = 15,
         [parameter(ValueFromPipelineByPropertyName)][int]$RotationPeriod = 3,
-        [bool]$StartUponCreation = $false,
+        [switch]$StartDataCollector,
         [parameter(ValueFromPipelineByPropertyName,DontShow)][xml]$XML
     )
 
@@ -36,7 +36,7 @@
         $SessionOptions = New-PSSessionOption -NoMachineProfile -SkipCACheck
 
         $Action = {
-            param( $DataCollectorName, $xml, $Sample, $Rotation, $AutoStart )
+            param( $DataCollectorName, $xml, $Sample, $Rotation, $StartDC )
 
             # Custimize template by removing some computer-specific nodes or edit nodes with new values according incoming parameters
             "//LatestOutputLocation","//OutputLocation","//Security" | % { try {$xml.ChildNodes.SelectNodes($_) | % {$_.ParentNode.RemoveChild($_)}} catch {} }
@@ -111,11 +111,11 @@
                     logman delete -n $DataCollectorName
 
                     $datacollectorset.Commit($DataCollectorName , $null , 0x0003) | Out-Null
-                    if ($AutoStart) {$datacollectorset.Start()}
+                    if ($StartDC) {$datacollectorset.Start($true)}
                 } else {"Skip Actions" | Out-Host}
             } else {
                 $datacollectorset.Commit($DataCollectorName , $null , 0x0003) | Out-Null
-                if ($AutoStart) {$datacollectorset.Start()}
+                if ($StartDC) {$datacollectorset.Start($true)}
             }
         }
     }
@@ -124,11 +124,11 @@
         if ($ComputerNames -ne @("localhost")) {
             $ComputerNames | % {
                 $_
-                Invoke-Command -Credential $Credentials -ComputerName $_ -SessionOption $SessionOptions -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$StartUponCreation) -ScriptBlock $Action
+                Invoke-Command -Credential $Credentials -ComputerName $_ -SessionOption $SessionOptions -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$($StartDataCollector.IsPresent)) -ScriptBlock $Action
             }
         } else { #localhost
             $env:COMPUTERNAME
-            Invoke-Command -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$StartUponCreation) -ScriptBlock $Action
+            Invoke-Command -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$($StartDataCollector.IsPresent)) -ScriptBlock $Action
         }
     }
 }

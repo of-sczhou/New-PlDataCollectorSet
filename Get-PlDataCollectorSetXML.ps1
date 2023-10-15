@@ -11,7 +11,7 @@
             DCSName - Name of data collector set
 
          .EXAMPLE
-            Get-PlDataCollectorSetXML
+            Get-PlDataCollectorSetXML : Lists existing Data Collector Sets on local computer
             Get-PlDataCollectorSetXML -ComputerName srv.contoso.com -$Credential (Get-Credential) -Name Set1
             Get-PlDataCollectorSetXML -ComputerName srv1.contoso.com -$Credential (Get-Credential) -Name Set1 | New-PlDataCollectorSet -ComputerName srv2.contoso.com -$Credential (Get-Credential)
 
