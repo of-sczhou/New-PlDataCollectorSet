@@ -15,8 +15,8 @@
 
          .EXAMPLE
             New-PlDataCollectorSet : creates DCS on the local computer using the first template found in the script's startup folder (Set1.xml coming with script in original release folder)
-            New-PlDataCollectorSet -DCSName "DiagSet_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName Set1.xml -StartUponCreation $false
-            New-PlDataCollectorSet -ComputerNames "srv1.contoso.com","srv1.contoso.com" -Credential (Get-Credential)  -DCSName "DiagSet_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName Set1.xml -StartUponCreation $false
+            New-PlDataCollectorSet -DCSName "DiagSet_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName Set1.xml -StartDataCollector
+            New-PlDataCollectorSet -ComputerNames "srv1.contoso.com","srv1.contoso.com" -Credential (Get-Credential)  -DCSName "DiagSet_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName Set1.xml -StartDataCollector
     #>
 
     [CmdletBinding()]
@@ -121,7 +121,7 @@
     }
 
     Process {
-        if ($ComputerNames -ne @("localhost")) {
+        if ($ComputerNames -ne @("localhost")) { #Remote Computer
             $ComputerNames | % {
                 $_
                 Invoke-Command -Credential $Credentials -ComputerName $_ -SessionOption $SessionOptions -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$($StartDataCollector.IsPresent)) -ScriptBlock $Action
@@ -134,4 +134,3 @@
 }
 
 Register-ArgumentCompleter -CommandName New-PlDataCollectorSet -ParameterName xmlTemplateName -ScriptBlock {[string[]](Get-ChildItem -Path ".\" -Filter "*.xml").Name}
-Register-ArgumentCompleter -CommandName New-PlDataCollectorSet -ParameterName StartUponCreation -ScriptBlock {@($([char]"$" + "true"),$([char]"$" + "false"))}
