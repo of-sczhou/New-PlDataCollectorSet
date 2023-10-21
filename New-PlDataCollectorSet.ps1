@@ -14,15 +14,15 @@
             StartDataCollector - this is a switch parameter, if it present Data Collector Set start immediatly after creation
 
          .EXAMPLE
-            New-PlDataCollectorSet : creates DCS on the local computer using the first template found in the script's startup folder (Set1.xml coming with script in original release folder)
-            New-PlDataCollectorSet -DCSName "DiagSet_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName Set1.xml -StartDataCollector
-            New-PlDataCollectorSet -ComputerNames "srv1.contoso.com","srv1.contoso.com" -Credential (Get-Credential)  -DCSName "DiagSet_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName Set1.xml -StartDataCollector
+            New-PlDataCollectorSet : creates DCS on the local computer using the first template found in the script's startup folder (24hRot-3LastSegments.xml coming with script in original release folder)
+            New-PlDataCollectorSet -DCSName "Perf_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName MyTemplate.xml -StartDataCollector
+            New-PlDataCollectorSet -ComputerNames "srv1.contoso.com","srv1.contoso.com" -Credential (Get-Credential)  -DCSName "Perf_3Days_15Sec" -RotationPeriod 3 -SampleInterval 15 -xmlTemplateName  MyTemplate.xml -StartDataCollector
     #>
 
     [CmdletBinding()]
     param (
         [string[]]$ComputerNames = @("localhost"),
-        [parameter(ValueFromPipelineByPropertyName)][string]$DCSName = "Set1",
+        [parameter(ValueFromPipelineByPropertyName)][string]$DCSName,
         [PSCredential]$Credential,
         [string]$xmlTemplateName = ([string[]](Get-ChildItem -Path ".\" -Filter "*.xml").Name)[0],
         [parameter(ValueFromPipelineByPropertyName)][int]$SampleInterval = 15,
@@ -38,7 +38,7 @@
         $Action = {
             param( $DataCollectorName, $xml, $Sample, $Rotation, $StartDC )
 
-            # Custimize template by removing some computer-specific nodes or edit nodes with new values according incoming parameters
+            # Customize template by removing some computer-specific nodes or edit nodes with new values according incoming parameters
             "//LatestOutputLocation","//OutputLocation","//Security" | % { try {$xml.ChildNodes.SelectNodes($_) | % {$_.ParentNode.RemoveChild($_)}} catch {} }
             $xml.SelectSingleNode("//Name").'#text' = $DataCollectorName
             $xml.SelectNodes("//*[starts-with(local-name(),'Description')]") | % {$_.'#text' = "This set was created by $env:USERNAME@$env:USERDOMAIN at $((Get-Date).ToString("yyyy.MM.dd-HH:mm:ss"))"}
@@ -48,7 +48,7 @@
             $xml.SelectSingleNode("//MaxFolderCount").'#text' = [string]$Rotation
             $xml.SelectSingleNode("//Age").'#text' = [string]$Rotation
 
-            # Rewrite 'CounterDisplayName' nodes values with OS System Language Names
+            # Rewrite values of 'CounterDisplayName' nodes with target OS System Language Names
             $ENU = (Get-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib\009" -Name "Counter").Counter
             $Current = (Get-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib\CurrentLanguage" -Name "Counter").Counter
 
@@ -79,7 +79,7 @@
             $datacollectorset = New-Object -COM Pla.DataCollectorSet
             $datacollectorset.SetXml($xml.OuterXml)
 
-            # Check DataCollector is already exist
+            # Check is Data Collector Set already exist
             $schedule = New-Object -ComObject "Schedule.Service"
             $schedule.Connect()
             $folder = $schedule.GetFolder("Microsoft\Windows\PLA")
@@ -121,6 +121,7 @@
     }
 
     Process {
+        if ($DCSName -eq "") {$DCSName = $xmlTemplateName.Replace(".xml","")}
         if ($ComputerNames -ne @("localhost")) { #Remote Computer
             $ComputerNames | % {
                 $_
