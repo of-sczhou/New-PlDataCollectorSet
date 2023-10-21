@@ -25,8 +25,8 @@
         [parameter(ValueFromPipelineByPropertyName)][string]$DCSName,
         [PSCredential]$Credential,
         [string]$xmlTemplateName = ([string[]](Get-ChildItem -Path ".\" -Filter "*.xml").Name)[0],
-        [parameter(ValueFromPipelineByPropertyName)][int]$SampleInterval = 15,
-        [parameter(ValueFromPipelineByPropertyName)][int]$RotationPeriod = 3,
+        [parameter(ValueFromPipelineByPropertyName)][int]$SampleInterval,
+        [parameter(ValueFromPipelineByPropertyName)][int]$RotationPeriod,
         [switch]$StartDataCollector,
         [parameter(ValueFromPipelineByPropertyName,DontShow)][xml]$XML
     )
@@ -38,15 +38,19 @@
         $Action = {
             param( $DataCollectorName, $xml, $Sample, $Rotation, $StartDC )
 
-            # Customize template by removing some computer-specific nodes or edit nodes with new values according incoming parameters
+            # Customize template by removing some computer-specific nodes or edit nodes with new values according incoming parameters if they are presents
             "//LatestOutputLocation","//OutputLocation","//Security" | % { try {$xml.ChildNodes.SelectNodes($_) | % {$_.ParentNode.RemoveChild($_)}} catch {} }
-            $xml.SelectSingleNode("//Name").'#text' = $DataCollectorName
+            if ($DataCollectorName -ne "") {
+                $xml.SelectSingleNode("//Name").'#text' = $DataCollectorName
+                $RootPathNode = $xml.SelectSingleNode("//RootPath")
+                $RootPathNode.'#text' = $RootPathNode.'#text'.Substring(0,$RootPathNode.'#text'.LastIndexOf("\") + 1) + $DataCollectorName
+            }
+
             $xml.SelectNodes("//*[starts-with(local-name(),'Description')]") | % {$_.'#text' = "This set was created by $env:USERNAME@$env:USERDOMAIN at $((Get-Date).ToString("yyyy.MM.dd-HH:mm:ss"))"}
-            $RootPathNode = $xml.SelectSingleNode("//RootPath")
-            $RootPathNode.'#text' = $RootPathNode.'#text'.Substring(0,$RootPathNode.'#text'.LastIndexOf("\") + 1) + $DataCollectorName
-            $xml.SelectSingleNode("//SampleInterval").'#text' = [string]$Sample
-            $xml.SelectSingleNode("//MaxFolderCount").'#text' = [string]$Rotation
-            $xml.SelectSingleNode("//Age").'#text' = [string]$Rotation
+            
+            if ($Sample -ne "") { $xml.SelectSingleNode("//SampleInterval").'#text' = [string]$Sample }
+
+            if ($Rotation -ne "") { $xml.SelectSingleNode("//Age").'#text' = [string]$Rotation }
 
             # Rewrite values of 'CounterDisplayName' nodes with target OS System Language Names
             $ENU = (Get-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib\009" -Name "Counter").Counter
@@ -101,6 +105,7 @@
             while (-Not $done)
             $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($schedule)
 
+            $DataCollectorName = $xml.SelectSingleNode("//Name").'#text'
             if ($tasks | ? {$_.Name -eq $DataCollectorName}) {
                 if ($(Read-Host "$DataCollectorName already exist, do you want to overwrite it (y/n)") -eq "y") {
                     logman stop -n $DataCollectorName
@@ -121,16 +126,16 @@
     }
 
     Process {
-        if ($DCSName -eq "") {$DCSName = $xmlTemplateName.Replace(".xml","")}
-        if ($ComputerNames -ne @("localhost")) { #Remote Computer
-            $ComputerNames | % {
-                $_
-                Invoke-Command -Credential $Credentials -ComputerName $_ -SessionOption $SessionOptions -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$($StartDataCollector.IsPresent)) -ScriptBlock $Action
+        Try {
+            if ($ComputerNames -ne @("localhost")) { #Remote Computer
+                $ComputerNames | % {
+                    Invoke-Command -Credential $Credentials -ComputerName $_ -SessionOption $SessionOptions -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$($StartDataCollector.IsPresent)) -ScriptBlock $Action
+                }
+            } else { #localhost
+                Invoke-Command -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$($StartDataCollector.IsPresent)) -ScriptBlock $Action
             }
-        } else { #localhost
-            $env:COMPUTERNAME
-            Invoke-Command -ArgumentList ($DCSName,$xmlTemplate,$SampleInterval,$RotationPeriod,$($StartDataCollector.IsPresent)) -ScriptBlock $Action
-        }
+            Write-Host "Done"
+        } catch {$_.Message}
     }
 }
 
